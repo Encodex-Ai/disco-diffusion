@@ -4,6 +4,7 @@ import json
 from dotenv import load_dotenv
 from amqpstorm import Connection
 from amqpstorm import Message
+from google.cloud import storage
 
 logging.basicConfig(level=logging.INFO)
 
@@ -26,18 +27,37 @@ with open('params.json') as f:
 video_files = [filename for filename in os.listdir("./videos") if filename.endswith('.mp4')]
 print("Found", len(video_files), "video files")
 
-with Connection(rabbitmq_host, rabbitmq_username, rabbitmq_password) as connection:
-    with connection.channel() as channel:
-        # Declare the Queue, queue_name.
-        channel.queue.declare(queue_name)
+# Initialize Google Cloud Storage client
+storage_client = storage.Client()
 
-        for video_file in video_files:
-            # Update the folder and batch_name in base_params.json
-            base_params['folder'] = video_file
-            base_params['batch_name'] = video_file
+# Get the public bucket URL
+bucket_url = os.getenv('PUBLIC_BUCKET_URL')
 
-            # Convert base_params to JSON string
-            base_params_json = json.dumps(base_params)
+for video_file in video_files:
+    # Upload the video file to the public Google Cloud Storage bucket
+    bucket_name = "staging-render-videos"  # Replace with your bucket name
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(f'input-videos/{video_file}')
+    blob.upload_from_filename(f'./videos/{video_file}')
+
+    # Generate the public URL for the uploaded video
+    video_public_url = f'{bucket_url}/input-videos/{video_file}'
+
+    # Update the folder and batch_name in base_params.json
+    base_params['source_blob_name'] = f'input-videos/{video_file}'
+    base_params['bucket_name'] = "staging-render-videos" 
+    base_params['video_init_path'] = f"/content/drive/MyDrive/AI/StableDiffusion/InputVideos/{video_file}"
+    
+    # Update the folder and batch_name in base_params.json
+    base_params['outdir'] = f"/content/drive/MyDrive/AI/StableDiffusion/Results/{video_file[:-4]}/"
+
+    # Convert base_params to JSON string
+    base_params_json = json.dumps(base_params)
+
+    with Connection(rabbitmq_host, rabbitmq_username, rabbitmq_password) as connection:
+        with connection.channel() as channel:
+            # Declare the Queue, queue_name.
+            channel.queue.declare(queue_name)
 
             # Message Properties.
             properties = {

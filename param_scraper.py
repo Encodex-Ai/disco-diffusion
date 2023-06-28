@@ -54,5 +54,5 @@ def scan_ipynb_for_params(ipynb_path, json_path):
         # print(params)
 
 # Example usage
-scan_ipynb_for_params('./Disco_Diffusion.ipynb', 'params.json')
+scan_ipynb_for_params('./Cópia_de_Deforum_Stable_Diffusion.ipynb', 'params.json')
 
